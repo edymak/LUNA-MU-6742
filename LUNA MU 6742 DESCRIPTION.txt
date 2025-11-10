@@ -1,0 +1,136 @@
+          
+
+
+                                                  LUNA MU 6742
+
+
+THE LUNA MU 6742 IS A VARI MU COMPRESSOR/LIMITER MODELED AFTER THE FAIRCHILD 670 WITH A TAPE SATURATOR (EMULATOR) MODELED AFTER THE NEVE 542.
+THE LUNA MU HAS ALL FEATURES OF ORIGINAL UNITS WITH A FEW MORE ADDED FEATURES. 
+THE COMPRESSOR SECTION IS STEREO MID/SIDE AND THE TAPE SATURATOR/EMULATOR IS STEREO.
+THE LUNA MU WAS MADE TO EMULATE BOTH UNITS USING SPEC SHEETS AND ORIGINAL SIGNAL DIAGRAMS TO SOUND AS CLOSE AS POSIBLE TO ORIGINAL UNITS.
+
+COMPRESSOR/LIMTER
+
+is a stereo variable-mu tube limiter known for its smooth, musical compression and warm, colored tone. A complex and highly-engineered unit,
+ it contains a total of 20 vacuum tubes and 11 custom-wound transformers. 
+
+Tube complement
+
+rich sound is created by its extensive tube architecture, with specific types designated for amplification, compression, and the power supply. 
+Audio path and control tubes
+8 x 6386 (Variable-mu tubes): This is the core component for gain reduction. The 6386 is a variable-mu or remote cut-off tube whose gain is controlled by a high DC control voltage.
+2 x 12AX7 (Dual triodes): Used in the audio amplification stages.
+4 x 6973 (Power pentodes): Used in the push-pull output stage for each of the two stereo channels.
+2 x 12BH7 (Dual triodes): Used as voltage and current gain stages.
+1 x E80F or EF806 (Pentode): Used in the control voltage circuit.
+1 x 5651 (Voltage regulator tube): A gas regulator tube used in the sidechain voltage regulation. 
+Power supply tubes
+1 x EL34 (Power tube): Used in the unit's power supply.
+1 x GZ34 (Rectifier tube): A tube rectifier for the power supply. 
+
+Transformer specifications
+
+The transformer-coupled design, using 11 custom-designed transformers play a crucial role in shaping the unit's tonal color and behavior. 
+The specific manufacturer details and proprietary specs of these custom-wound transformers are not publicly available for vintage units. 
+Quantity: 11 transformers.Input Impedance: 600 \(\Omega \).Output Impedance: 600 \(\Omega \).Purpose: These transformers are used for signal coupling at the input and output stages, 
+as well as for power supply isolation and filtering. 
+
+TAPE SATURATOR/EMULATOR
+
+is a tape emulator module that combines an analog tape saturation circuit with custom transformers and variable color/Texture
+ control. This module provides a wide range of tonal options by blending the effects of the "True Tape" circuit, color, and transformers. The official specifications are often broken
+ down into two sections: those for the transparent line amplifier (with the tape circuit disengaged) and those for the tape emulation circuit itself. Line amplifier specifications 
+(tape circuit disengaged) This mode provides a high-performance, transformer-coupled line amplifier. Noise: Better than -100 dBu (unity gain, unweighted, 20 Hz–22 kHz).Frequency
+ Response:\(\pm 0.25\) dB from 5 Hz to 60 kHz.-2 dB at 120 kHz.Total Harmonic Distortion and Noise (THD+N):Better than 0.0025% at 1 kHz,
+ +20 dBu output level.0.07% at 20 Hz, +20 dBu output level (typical 2nd and 3rd harmonics).Maximum Output Level: +23.25 dBu. "True Tape" effects specifications This data covers 
+the characteristics of the tape emulation circuit, which includes the custom interstage transformer. The tone is affected by the Saturation, 7.5/15/30 IPS, and color/Texture controls. 
+Noise (typical, saturation at minimum): Better than -100 dBu (unweighted, 20 Hz–22 kHz).15 IPS mode (Tape effect engaged):Frequency Response: A low-frequency "head bump" centered 
+around 60 Hz and a high-frequency rolloff.THD+N (nominal): Varies with saturation and frequency. For example, 0.4% at 3 kHz and 1% at 175 Hz 
+typical (input at 0 dBu, minimum saturation).30 IPS mode (Tape effect engaged):Frequency Response: A flatter high-end response with a low-frequency
+ "head bump" around 120 Hz.THD+N (nominal): Varies with saturation and frequency. For example, 1% at 1 kHz typical (input at 0 dBu, minimum saturation). 
+Transformers and controls The 542's rich tonal qualities are also shaped by its components and features. Custom Transformers: The module uses custom-designed interstage transformers. 
+These act as a "record head," and their behavior, along with a custom replay amplifier, produces the analog tape saturation effect.Variable colr/Texture: 
+This control offers a continuously variable amount of harmonic coloration, from the subtle color mode found in earlier Portico designs to a more pronounced effect reminiscent
+ of vintage Class-A gear.color orange (warm): Emphasizes harmonic content in the mid and high frequencies.color Blue: Emphasizes harmonic content in the low frequencies.Blend Control:
+ This knob allows you to mix the original dry signal with the processed "True Tape" sound, enabling parallel processing. 
+
+
+COMPRESSOR/LIMITER section features:
+
+time constant knob - 
+Position 1:
+0.2 ms attack, 300 ms release. Best for handling sharp transients in drums, percussion, and plucked instruments. 
+Position 2:
+0.2 ms attack, 800 ms release. Good for vocals, bass, and overheads, providing a slightly longer release. 
+Position 3:
+0.4 ms attack, 2-second release. A balanced setting for mix bus, ballads, and acoustic guitar. 
+Position 4:
+0.8 ms attack, 5-second release. Ideal for transparent bus compression, mastering, and slower sounds. 
+Program-Dependent Time Constant Settings (Positions 5-6)
+These settings feature "auto-release" characteristics, where the release time changes based on the incoming audio. 
+Position 5:
+0.2 ms attack, 2-second release for transients and a 10-second release for multiple peaks. 
+Position 6:
+0.2 ms attack, 300 ms release for transients, 10 seconds for multiple peaks, and 25 seconds for sustained high-level signals. 
+
+threshold knob - 10 step for reduction/compression A continuously variable control for adjusting the compression threshold
+
+input gain knob - 20 to 0 A stepped attenuator provides precise control over the input level for each channel. 
+The compression ratio increases as the input signal gets louder. For example, the unit can be set for a gentle 
+2:1 ratio for softer compression, but will push up toward a 30:1 ratio as a brickwall limiter when the signal 
+hits it hard (tubes illuminate brighter as input gain is driven and tubes slightly flicker to reduction)
+Due to its variable-mu nature, the compressor also features a soft-knee compression curve. This means the compression
+ is very gentle at first and smoothly increases as the input signal grows
+
+sc hpf switch = off, 60 hz, 120 hz
+
+comp off button - shiuts off entire comp. section
+
+output knob - min. to max. for controlling output of comp
+
+meters (needles) - for level indication and compression indication Each channel features a VU meter with a switch to monitor either the signal's limiting or 
+the plate current of the control tubes
+
+link/unlink switch - for controlling left/right/mid/side individualy or left side controls both sides equally
+
+left,right/mid,side switch - for making unit mid/side or stereo
+
+mix knob (dry to wet) - for parallel compression wet or fully dry signal
+
+tape->comp., comp.->tape switch - for input direction of unit preference (tape->comp. is tape unit input before comp. comp.-.tape is comp. input first)
+
+TAPE (EMULATOR) SATURATION section features:
+
+tape off button - shuts off entire tape section
+
+trim knob -12, 0, +12 - Provides +/– 12dB adjustment of level on incoming signal levels, prior to the tape circuit.
+
+saturation knob min., max. - Continuously variable control of the level being sent to the ‘tape effect’ circuit. 
+Increasing Saturation levels drives the ‘record’ gain while simultaneously reducing the ‘replay’ gain so
+ the overall output signal level remains consistent. The output signal level will decrease slightly as the
+ MAX setting is approached due to the extreme saturation and soft clipping
+
+blend 0, 100%- Continuously variable control of the mix of pre and post tape effect signals.
+ This allows for precise control over the amount of saturation, tone and soft clipping produced. 
+As the signal gets more saturated, reducing the blend can be an effective way to impart the sound 
+of ‘tape’ while maintaining detail and transparency. NOTE: The blend control does not affect the amount of Silk Texture applied.
+
+ips switch 7,15,30 - Push-button switch that toggles between 3 different frequency responses commonly found at 7,15 or 30 IPS tape machine speeds.
+the 7 ips typical "head bump" or low-frequency resonance usually occurs in the 35–65 Hz range
+ The 15 IPS mode has a significant “head bump” in the low frequencies centered around 60Hz and a more pronounced roll off in the high frequencies. 
+The 30 IPS mode is generally a flatter response altogether with a “head bump” around 120Hz.
+
+texture knob min., max. - controls how much color is applied to signal (work in conjunction with color switch)
+
+color switch - Illuminated push-button switch that toggles through the three available color modes: OFF, orange, and BLUE. 
+blue enhances harmonic content in high mid and high frequencies. orange enhances harmonic content in low and low mid frequencies
+
+tape in button - toggles between tape section on or off but still able to use color section
+
+drive/level meters - Two eight segment LED meters are included for indicating output level and drive amount.
+ The level meter displays the output level after the tape, before the color circuit, and the drive meter displays the level sent to the “record head”
+ when the tape effect is engaged. The soft clip circuit is present at drive levels above 5.
+
+BACKPLATES (SKINS) - backplates toggle between 2 skins when nu moon logo is pressed, tubes illuminate doe to compressors input drive and signal
+ 
+
