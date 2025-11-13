@@ -1,0 +1,1216 @@
+function processBlock(channels)
+{
+    var numSamples = channels[0].length;
+    var sr = Engine.getSampleRate();
+    
+    var compBypass = (Globals.CompIn < 0.5);
+    var tapeBypass = (Globals.TapeBypass > 0.5);
+    
+    if (compBypass && tapeBypass) {
+        Globals.compGRL = 0.0;
+        Globals.compGRR = 0.0;
+        Globals.tapeDrivePeakL = 0.0;
+        Globals.tapeDrivePeakR = 0.0;
+        Globals.tapeLevelPeakL = 0.0;
+        Globals.tapeLevelPeakR = 0.0;
+        return;
+    }
+    
+    var compOrder = Globals.CompTapeOrder;
+    
+    // ========== COMPRESSION COEFFICIENTS ==========
+    var inputGainL = Math.pow(10, (Globals.InputGainL - 18.0) / 20);
+    var inputGainR = Math.pow(10, (Globals.InputGainR - 18.0) / 20);
+    var inputGainMid = Math.pow(10, (Globals.InputGainMid - 18.0) / 20);
+    var inputGainSide = Math.pow(10, (Globals.InputGainSide - 18.0) / 20);
+    
+    var thresholdL = 0.95 - (Globals.ThresholdL / 10.0 * 0.91);
+    var thresholdR = 0.95 - (Globals.ThresholdR / 10.0 * 0.91);
+    var thresholdMid = 0.95 - (Globals.ThresholdMid / 10.0 * 0.91);
+    var thresholdSide = 0.95 - (Globals.ThresholdSide / 10.0 * 0.91);
+    
+    var outputGainL = Math.pow(10, ((Globals.OutputL - 50) * 0.3) / 20);
+    var outputGainR = Math.pow(10, ((Globals.OutputR - 50) * 0.3) / 20);
+    var outputGainMid = Math.pow(10, ((Globals.OutputMid - 50) * 0.3) / 20);
+    var outputGainSide = Math.pow(10, ((Globals.OutputSide - 50) * 0.3) / 20);
+    
+    var mix = Globals.MixKnob / 100.0;
+    var midSide = (Globals.MidSideMode == 0);
+    
+    // ========== TAPE PARAMETERS ==========
+    var trimL = Math.pow(10, (Globals.TrimL - 3.0) / 20);
+    var trimR = Math.pow(10, (Globals.TrimR - 3.0) / 20);
+    var satL = Globals.SaturationL / 100.0;
+    var satR = Globals.SaturationR / 100.0;
+    var blendL = Globals.BlendL / 100.0;
+    var blendR = Globals.BlendR / 100.0;
+    var textureL = Globals.TextureL / 100.0;
+    var textureR = Globals.TextureR / 100.0;
+    var colorL = Globals.ColorModeL;
+    var colorR = Globals.ColorModeR;
+    var tapeInL = (Globals.TapeInL > 0.5);
+    var tapeInR = (Globals.TapeInR > 0.5);
+    var ipsL = Globals.IPSL;
+    var ipsR = Globals.IPSR;
+    
+    // ========== PRE-EMPHASIS FILTER COEFFICIENTS ==========
+    var preFreqL, preGainL, dcBlockAlphaL;
+    var preFreqR, preGainR, dcBlockAlphaR;
+    
+    if (ipsL < 0.5) {
+        preFreqL = 40.0;
+        preGainL = 2.0;
+        dcBlockAlphaL = Math.exp(-6.28318 * 10.0 / sr);
+    } else if (ipsL < 1.5) {
+        preFreqL = 60.0;
+        preGainL = 1.78;
+        dcBlockAlphaL = Math.exp(-6.28318 * 10.0 / sr);
+    } else {
+        preFreqL = 125.0;
+        preGainL = 1.44;
+        dcBlockAlphaL = Math.exp(-6.28318 * 10.0 / sr);
+    }
+    
+    if (ipsR < 0.5) {
+        preFreqR = 40.0;
+        preGainR = 2.0;
+        dcBlockAlphaR = Math.exp(-6.28318 * 10.0 / sr);
+    } else if (ipsR < 1.5) {
+        preFreqR = 60.0;
+        preGainR = 1.78;
+        dcBlockAlphaR = Math.exp(-6.28318 * 10.0 / sr);
+    } else {
+        preFreqR = 125.0;
+        preGainR = 1.44;
+        dcBlockAlphaR = Math.exp(-6.28318 * 10.0 / sr);
+    }
+    
+    var preBoostAlphaL = Math.exp(-6.28318 * preFreqL / sr);
+    var preBoostAlphaR = Math.exp(-6.28318 * preFreqR / sr);
+    
+    // ========== DE-EMPHASIS FILTER COEFFICIENTS ==========
+    var deFreqL, deAlphaL;
+    var deFreqR, deAlphaR;
+    
+    if (ipsL < 0.5) {
+        deFreqL = 5000.0;
+    } else if (ipsL < 1.5) {
+        deFreqL = 28000.0 - (satL * 8000.0);
+    } else {
+        deFreqL = 120000.0 - (satL * 20000.0);
+    }
+    deAlphaL = Math.exp(-6.28318 * deFreqL / sr);
+    
+    if (ipsR < 0.5) {
+        deFreqR = 5000.0;
+    } else if (ipsR < 1.5) {
+        deFreqR = 28000.0 - (satR * 8000.0);
+    } else {
+        deFreqR = 120000.0 - (satR * 20000.0);
+    }
+    deAlphaR = Math.exp(-6.28318 * deFreqR / sr);
+    
+    // ========== SILK COLOR FILTER COEFFICIENTS ==========
+    var orangeAlpha = Math.exp(-6.28318 * 400.0 / sr);
+    var blueAlpha = Math.exp(-6.28318 * 2000.0 / sr);
+    
+    var peakGRL = 0.0;
+    var peakGRR = 0.0;
+    var drivePeakL = 0.0;
+    var drivePeakR = 0.0;
+    var levelPeakL = 0.0;
+    var levelPeakR = 0.0;
+    
+    if (compOrder < 0.5)
+    {
+        // ========== ORDER 1: COMP → TAPE ==========
+        
+        if (!compBypass)
+        {
+            for (var s = 0; s < numSamples; s++)
+            {
+                var L = channels[0][s];
+                var R = channels[1][s];
+                var dryL = L;
+                var dryR = R;
+                
+                if (midSide)
+                {
+                    var M = (L + R) * 0.5;
+                    var S = (L - R) * 0.5;
+                    
+                    M = M * inputGainMid;
+                    
+                    var detectionM = M;
+                    if (Globals.SCHPFSwitchMid > 0.5) {
+                        var scFreq = (Globals.SCHPFSwitchMid > 1.5) ? 120.0 : 60.0;
+                        var omega = 6.28318 * scFreq / sr;
+                        var alpha = Math.exp(-omega);
+                        detectionM = M - scHPF_Mid * alpha;
+                        scHPF_Mid = detectionM;
+                    }
+                    
+                    var attackTimeMid = 0.0002;
+                    var releaseTimeMid = 0.3;
+                    var tcMid = Globals.TimeConstantMid;
+                    var inputLevelMid = Math.abs(detectionM);
+                    
+                    if (tcMid < 1.5) {
+                        attackTimeMid = 0.0002;
+                        releaseTimeMid = 0.3;
+                    }
+                    else if (tcMid < 2.5) {
+                        attackTimeMid = 0.0002;
+                        releaseTimeMid = 0.8;
+                    }
+                    else if (tcMid < 3.5) {
+                        attackTimeMid = 0.0004;
+                        releaseTimeMid = 2.0;
+                    }
+                    else if (tcMid < 4.5) {
+                        attackTimeMid = 0.0004;
+                        releaseTimeMid = 5.0;
+                    }
+                    else if (tcMid < 5.5) {
+                        attackTimeMid = 0.0004;
+                        if (inputLevelMid > peakHoldMid) {
+                            peakHoldMid = inputLevelMid;
+                            peakTimerMid = 0.0;
+                            releaseTimeMid = 2.0;
+                        }
+                        else {
+                            peakTimerMid = peakTimerMid + (1.0 / sr);
+                            releaseTimeMid = (peakTimerMid < 0.1) ? 2.0 : 10.0;
+                        }
+                    }
+                    else {
+                        attackTimeMid = 0.0002;
+                        if (inputLevelMid > peakHoldMid) {
+                            peakHoldMid = inputLevelMid;
+                            peakTimerMid = 0.0;
+                            releaseTimeMid = 0.3;
+                        }
+                        else {
+                            peakTimerMid = peakTimerMid + (1.0 / sr);
+                            if (peakTimerMid < 0.05)
+                                releaseTimeMid = 0.3;
+                            else if (peakTimerMid < 0.5)
+                                releaseTimeMid = 10.0;
+                            else
+                                releaseTimeMid = 25.0;
+                        }
+                    }
+                    
+                    var attackCoeffMid = Math.exp(-1.0 / (attackTimeMid * sr));
+                    var releaseCoeffMid = Math.exp(-1.0 / (releaseTimeMid * sr));
+                    
+                    if (inputLevelMid > envMid)
+                        envMid = envMid + (1.0 - attackCoeffMid) * (inputLevelMid - envMid);
+                    else
+                        envMid = envMid + (1.0 - releaseCoeffMid) * (inputLevelMid - envMid);
+                    
+                    var preMid = M;
+                    
+                    if (Globals.ThresholdMid > 0.1) {
+                        if (envMid > thresholdMid) {
+                            var overMid = envMid - thresholdMid;
+                            var ratioMid = 2.0 + (overMid * 10.0);
+                            ratioMid = Math.min(ratioMid, 30.0);
+                            var compMid = thresholdMid + (overMid / ratioMid);
+                            var scale = compMid / envMid;
+                            M = M * scale;
+                        }
+                    }
+                    
+                    var postMid = M;
+                    M = M * outputGainMid;
+                    M = M / (1.0 + Math.abs(M));
+                    
+                    if (Math.abs(preMid) > 0.001) {
+                        var grMid = 1.0 - (Math.abs(postMid) / Math.abs(preMid));
+                        peakGRL = Math.max(peakGRL, Math.max(0.0, Math.min(1.0, grMid)));
+                    }
+                    
+                    S = S * inputGainSide;
+                    
+                    var detectionS = S;
+                    if (Globals.SCHPFSwitchSide > 0.5) {
+                        var scFreq = (Globals.SCHPFSwitchSide > 1.5) ? 120.0 : 60.0;
+                        var omega = 6.28318 * scFreq / sr;
+                        var alpha = Math.exp(-omega);
+                        detectionS = S - scHPF_Side * alpha;
+                        scHPF_Side = detectionS;
+                    }
+                    
+                    var attackTimeSide = 0.0002;
+                    var releaseTimeSide = 0.3;
+                    var tcSide = Globals.TimeConstantSide;
+                    var inputLevelSide = Math.abs(detectionS);
+                    
+                    if (tcSide < 1.5) {
+                        attackTimeSide = 0.0002;
+                        releaseTimeSide = 0.3;
+                    }
+                    else if (tcSide < 2.5) {
+                        attackTimeSide = 0.0002;
+                        releaseTimeSide = 0.8;
+                    }
+                    else if (tcSide < 3.5) {
+                        attackTimeSide = 0.0004;
+                        releaseTimeSide = 2.0;
+                    }
+                    else if (tcSide < 4.5) {
+                        attackTimeSide = 0.0004;
+                        releaseTimeSide = 5.0;
+                    }
+                    else if (tcSide < 5.5) {
+                        attackTimeSide = 0.0004;
+                        if (inputLevelSide > peakHoldSide) {
+                            peakHoldSide = inputLevelSide;
+                            peakTimerSide = 0.0;
+                            releaseTimeSide = 2.0;
+                        }
+                        else {
+                            peakTimerSide = peakTimerSide + (1.0 / sr);
+                            releaseTimeSide = (peakTimerSide < 0.1) ? 2.0 : 10.0;
+                        }
+                    }
+                    else {
+                        attackTimeSide = 0.0002;
+                        if (inputLevelSide > peakHoldSide) {
+                            peakHoldSide = inputLevelSide;
+                            peakTimerSide = 0.0;
+                            releaseTimeSide = 0.3;
+                        }
+                        else {
+                            peakTimerSide = peakTimerSide + (1.0 / sr);
+                            if (peakTimerSide < 0.05)
+                                releaseTimeSide = 0.3;
+                            else if (peakTimerSide < 0.5)
+                                releaseTimeSide = 10.0;
+                            else
+                                releaseTimeSide = 25.0;
+                        }
+                    }
+                    
+                    var attackCoeffSide = Math.exp(-1.0 / (attackTimeSide * sr));
+                    var releaseCoeffSide = Math.exp(-1.0 / (releaseTimeSide * sr));
+                    
+                    if (inputLevelSide > envSide)
+                        envSide = envSide + (1.0 - attackCoeffSide) * (inputLevelSide - envSide);
+                    else
+                        envSide = envSide + (1.0 - releaseCoeffSide) * (inputLevelSide - envSide);
+                    
+                    var preSide = S;
+                    
+                    if (Globals.ThresholdSide > 0.1) {
+                        if (envSide > thresholdSide) {
+                            var overSide = envSide - thresholdSide;
+                            var ratioSide = 2.0 + (overSide * 10.0);
+                            ratioSide = Math.min(ratioSide, 30.0);
+                            var compSide = thresholdSide + (overSide / ratioSide);
+                            var scale = compSide / envSide;
+                            S = S * scale;
+                        }
+                    }
+                    
+                    var postSide = S;
+                    S = S * outputGainSide;
+                    S = S / (1.0 + Math.abs(S));
+                    
+                    if (Math.abs(preSide) > 0.001) {
+                        var grSide = 1.0 - (Math.abs(postSide) / Math.abs(preSide));
+                        peakGRR = Math.max(peakGRR, Math.max(0.0, Math.min(1.0, grSide)));
+                    }
+                    
+                    L = M + S;
+                    R = M - S;
+                }
+                else
+                {
+                    L = L * inputGainL;
+                    
+                    var detectionL = L;
+                    if (Globals.SCHPFSwitchL > 0.5) {
+                        var scFreq = (Globals.SCHPFSwitchL > 1.5) ? 120.0 : 60.0;
+                        var omega = 6.28318 * scFreq / sr;
+                        var alpha = Math.exp(-omega);
+                        detectionL = L - scHPF_L * alpha;
+                        scHPF_L = detectionL;
+                    }
+                    
+                    var attackTimeL = 0.0002;
+                    var releaseTimeL = 0.3;
+                    var tcL = Globals.TimeConstantL;
+                    var inputLevelL = Math.abs(detectionL);
+                    
+                    if (tcL < 1.5) {
+                        attackTimeL = 0.0002;
+                        releaseTimeL = 0.3;
+                    }
+                    else if (tcL < 2.5) {
+                        attackTimeL = 0.0002;
+                        releaseTimeL = 0.8;
+                    }
+                    else if (tcL < 3.5) {
+                        attackTimeL = 0.0004;
+                        releaseTimeL = 2.0;
+                    }
+                    else if (tcL < 4.5) {
+                        attackTimeL = 0.0004;
+                        releaseTimeL = 5.0;
+                    }
+                    else if (tcL < 5.5) {
+                        attackTimeL = 0.0004;
+                        if (inputLevelL > peakHoldL) {
+                            peakHoldL = inputLevelL;
+                            peakTimerL = 0.0;
+                            releaseTimeL = 2.0;
+                        }
+                        else {
+                            peakTimerL = peakTimerL + (1.0 / sr);
+                            releaseTimeL = (peakTimerL < 0.1) ? 2.0 : 10.0;
+                        }
+                    }
+                    else {
+                        attackTimeL = 0.0002;
+                        if (inputLevelL > peakHoldL) {
+                            peakHoldL = inputLevelL;
+                            peakTimerL = 0.0;
+                            releaseTimeL = 0.3;
+                        }
+                        else {
+                            peakTimerL = peakTimerL + (1.0 / sr);
+                            if (peakTimerL < 0.05)
+                                releaseTimeL = 0.3;
+                            else if (peakTimerL < 0.5)
+                                releaseTimeL = 10.0;
+                            else
+                                releaseTimeL = 25.0;
+                        }
+                    }
+                    
+                    var attackCoeffL = Math.exp(-1.0 / (attackTimeL * sr));
+                    var releaseCoeffL = Math.exp(-1.0 / (releaseTimeL * sr));
+                    
+                    if (inputLevelL > envL)
+                        envL = envL + (1.0 - attackCoeffL) * (inputLevelL - envL);
+                    else
+                        envL = envL + (1.0 - releaseCoeffL) * (inputLevelL - envL);
+                    
+                    var preL = L;
+                    
+                    if (Globals.ThresholdL > 0.1) {
+                        if (envL > thresholdL) {
+                            var overL = envL - thresholdL;
+                            var ratioL = 2.0 + (overL * 10.0);
+                            ratioL = Math.min(ratioL, 30.0);
+                            var compL = thresholdL + (overL / ratioL);
+                            var scale = compL / envL;
+                            L = L * scale;
+                        }
+                    }
+                    
+                    var postL = L;
+                    L = L * outputGainL;
+                    L = L / (1.0 + Math.abs(L));
+                    
+                    if (Math.abs(preL) > 0.001) {
+                        var grLeft = 1.0 - (Math.abs(postL) / Math.abs(preL));
+                        peakGRL = Math.max(peakGRL, Math.max(0.0, Math.min(1.0, grLeft)));
+                    }
+                    
+                    R = R * inputGainR;
+                    
+                    var detectionR = R;
+                    if (Globals.SCHPFSwitchR > 0.5) {
+                        var scFreq = (Globals.SCHPFSwitchR > 1.5) ? 120.0 : 60.0;
+                        var omega = 6.28318 * scFreq / sr;
+                        var alpha = Math.exp(-omega);
+                        detectionR = R - scHPF_R * alpha;
+                        scHPF_R = detectionR;
+                    }
+                    
+                    var attackTimeR = 0.0002;
+                    var releaseTimeR = 0.3;
+                    var tcR = Globals.TimeConstantR;
+                    var inputLevelR = Math.abs(detectionR);
+                    
+                    if (tcR < 1.5) {
+                        attackTimeR = 0.0002;
+                        releaseTimeR = 0.3;
+                    }
+                    else if (tcR < 2.5) {
+                        attackTimeR = 0.0002;
+                        releaseTimeR = 0.8;
+                    }
+                    else if (tcR < 3.5) {
+                        attackTimeR = 0.0004;
+                        releaseTimeR = 2.0;
+                    }
+                    else if (tcR < 4.5) {
+                        attackTimeR = 0.0004;
+                        releaseTimeR = 5.0;
+                    }
+                    else if (tcR < 5.5) {
+                        attackTimeR = 0.0004;
+                        if (inputLevelR > peakHoldR) {
+                            peakHoldR = inputLevelR;
+                            peakTimerR = 0.0;
+                            releaseTimeR = 2.0;
+                        }
+                        else {
+                            peakTimerR = peakTimerR + (1.0 / sr);
+                            releaseTimeR = (peakTimerR < 0.1) ? 2.0 : 10.0;
+                        }
+                    }
+                    else {
+                        attackTimeR = 0.0002;
+                        if (inputLevelR > peakHoldR) {
+                            peakHoldR = inputLevelR;
+                            peakTimerR = 0.0;
+                            releaseTimeR = 0.3;
+                        }
+                        else {
+                            peakTimerR = peakTimerR + (1.0 / sr);
+                            if (peakTimerR < 0.05)
+                                releaseTimeR = 0.3;
+                            else if (peakTimerR < 0.5)
+                                releaseTimeR = 10.0;
+                            else
+                                releaseTimeR = 25.0;
+                        }
+                    }
+                    
+                    var attackCoeffR = Math.exp(-1.0 / (attackTimeR * sr));
+                    var releaseCoeffR = Math.exp(-1.0 / (releaseTimeR * sr));
+                    
+                    if (inputLevelR > envR)
+                        envR = envR + (1.0 - attackCoeffR) * (inputLevelR - envR);
+                    else
+                        envR = envR + (1.0 - releaseCoeffR) * (inputLevelR - envR);
+                    
+                    var preR = R;
+                    
+                    if (Globals.ThresholdR > 0.1) {
+                        if (envR > thresholdR) {
+                            var overR = envR - thresholdR;
+                            var ratioR = 2.0 + (overR * 10.0);
+                            ratioR = Math.min(ratioR, 30.0);
+                            var compR = thresholdR + (overR / ratioR);
+                            var scale = compR / envR;
+                            R = R * scale;
+                        }
+                    }
+                    
+                    var postR = R;
+                    R = R * outputGainR;
+                    R = R / (1.0 + Math.abs(R));
+                    
+                    if (Math.abs(preR) > 0.001) {
+                        var grRight = 1.0 - (Math.abs(postR) / Math.abs(preR));
+                        peakGRR = Math.max(peakGRR, Math.max(0.0, Math.min(1.0, grRight)));
+                    }
+                }
+                
+                L = dryL * (1.0 - mix) + L * mix;
+                R = dryR * (1.0 - mix) + R * mix;
+                
+                channels[0][s] = L;
+                channels[1][s] = R;
+            }
+            
+            Globals.compGRL = peakGRL;
+            Globals.compGRR = peakGRR;
+        }
+        else
+        {
+            Globals.compGRL = 0.0;
+            Globals.compGRR = 0.0;
+        }
+        
+        // ========== TAPE SECTION (CORRECTED SIGNAL FLOW) ==========
+        if (!tapeBypass)
+        {
+            for (var s = 0; s < numSamples; s++)
+            {
+                var L = channels[0][s];
+                var R = channels[1][s];
+                
+                // ===== LEFT CHANNEL =====
+                
+                // INPUT TRANSFORMER (ALWAYS ON)
+                tapeInDC_L = tapeInDC_L * 0.999 + L * 0.001;
+                var acSigL = L - tapeInDC_L;
+                tapeInLF_L = tapeInLF_L * 0.95 + acSigL * 0.05;
+                var lfAmt = Math.abs(tapeInLF_L);
+                var inputTransL = acSigL + acSigL * acSigL * 0.01 * lfAmt + acSigL * acSigL * acSigL * 0.005 * lfAmt;
+                
+                // TRIM (ALWAYS ON)
+                var dryTapeSigL = inputTransL * trimL;
+                var wetTapeSigL = dryTapeSigL;
+                
+                // TAPE IN SWITCH - only affects pre-emphasis/saturation/de-emphasis
+                if (tapeInL) {
+                    // PRE-EMPHASIS
+                    tapePreDC_L = tapePreDC_L * dcBlockAlphaL + wetTapeSigL * (1.0 - dcBlockAlphaL);
+                    wetTapeSigL = wetTapeSigL - tapePreDC_L;
+                    tapePreLF_L = tapePreLF_L * preBoostAlphaL + wetTapeSigL * (1.0 - preBoostAlphaL);
+                    wetTapeSigL = wetTapeSigL + tapePreLF_L * (preGainL - 1.0);
+                    
+                    // SATURATION
+                    var drive = 1.0 + satL * 2.5;
+                    wetTapeSigL = wetTapeSigL * drive;
+                    
+                    tapeSatLF_L = tapeSatLF_L * 0.98 + wetTapeSigL * 0.02;
+                    var lfSatAmt = Math.abs(tapeSatLF_L) * 0.5;
+                    
+                    var x = wetTapeSigL;
+                    wetTapeSigL = x / (1.0 + Math.abs(x) * 0.5);
+                    wetTapeSigL = wetTapeSigL + x * x * 0.1 * (1.0 + lfSatAmt) + x * x * x * 0.05 * (1.0 + lfSatAmt);
+                    
+                    wetTapeSigL = wetTapeSigL / drive;
+                    
+                    // DE-EMPHASIS
+                    tapeDeEmp_L = tapeDeEmp_L * deAlphaL + wetTapeSigL * (1.0 - deAlphaL);
+                    wetTapeSigL = tapeDeEmp_L;
+                }
+                
+                // BLEND (ALWAYS ON)
+                L = dryTapeSigL * (1.0 - blendL) + wetTapeSigL * blendL;
+                
+                // SILK COLOR (ALWAYS ON if engaged)
+                if (colorL == 1) {
+                    tapeSilkLF_L = tapeSilkLF_L * orangeAlpha + L * (1.0 - orangeAlpha);
+                    var orangeSig = tapeSilkLF_L;
+                    L = L + orangeSig * orangeSig * 0.1 * textureL + orangeSig * orangeSig * orangeSig * 0.05 * textureL;
+                }
+                else if (colorL == 2) {
+                    tapeSilkHF_L = tapeSilkHF_L * blueAlpha + L * (1.0 - blueAlpha);
+                    var blueSig = L - tapeSilkHF_L;
+                    L = L + blueSig * blueSig * 0.08 * textureL + blueSig * blueSig * blueSig * 0.04 * textureL;
+                }
+                
+                // OUTPUT TRANSFORMER (ALWAYS ON)
+                L = L + L * L * 0.003 + L * L * L * 0.0015;
+                
+                // ===== RIGHT CHANNEL =====
+                
+                // INPUT TRANSFORMER (ALWAYS ON)
+                tapeInDC_R = tapeInDC_R * 0.999 + R * 0.001;
+                var acSigR = R - tapeInDC_R;
+                tapeInLF_R = tapeInLF_R * 0.95 + acSigR * 0.05;
+                var lfAmt = Math.abs(tapeInLF_R);
+                var inputTransR = acSigR + acSigR * acSigR * 0.01 * lfAmt + acSigR * acSigR * acSigR * 0.005 * lfAmt;
+                
+                // TRIM (ALWAYS ON)
+                var dryTapeSigR = inputTransR * trimR;
+                var wetTapeSigR = dryTapeSigR;
+                
+                // TAPE IN SWITCH
+                if (tapeInR) {
+                    // PRE-EMPHASIS
+                    tapePreDC_R = tapePreDC_R * dcBlockAlphaR + wetTapeSigR * (1.0 - dcBlockAlphaR);
+                    wetTapeSigR = wetTapeSigR - tapePreDC_R;
+                    tapePreLF_R = tapePreLF_R * preBoostAlphaR + wetTapeSigR * (1.0 - preBoostAlphaR);
+                    wetTapeSigR = wetTapeSigR + tapePreLF_R * (preGainR - 1.0);
+                    
+                    // SATURATION
+                    var drive = 1.0 + satR * 2.5;
+                    wetTapeSigR = wetTapeSigR * drive;
+                    
+                    tapeSatLF_R = tapeSatLF_R * 0.98 + wetTapeSigR * 0.02;
+                    var lfSatAmt = Math.abs(tapeSatLF_R) * 0.5;
+                    
+                    var x = wetTapeSigR;
+                    wetTapeSigR = x / (1.0 + Math.abs(x) * 0.5);
+                    wetTapeSigR = wetTapeSigR + x * x * 0.1 * (1.0 + lfSatAmt) + x * x * x * 0.05 * (1.0 + lfSatAmt);
+                    
+                    wetTapeSigR = wetTapeSigR / drive;
+                    
+                    // DE-EMPHASIS
+                    tapeDeEmp_R = tapeDeEmp_R * deAlphaR + wetTapeSigR * (1.0 - deAlphaR);
+                    wetTapeSigR = tapeDeEmp_R;
+                }
+                
+                // BLEND (ALWAYS ON)
+                R = dryTapeSigR * (1.0 - blendR) + wetTapeSigR * blendR;
+                
+                // SILK COLOR (ALWAYS ON if engaged)
+                if (colorR == 1) {
+                    tapeSilkLF_R = tapeSilkLF_R * orangeAlpha + R * (1.0 - orangeAlpha);
+                    var orangeSig = tapeSilkLF_R;
+                    R = R + orangeSig * orangeSig * 0.1 * textureR + orangeSig * orangeSig * orangeSig * 0.05 * textureR;
+                }
+                else if (colorR == 2) {
+                    tapeSilkHF_R = tapeSilkHF_R * blueAlpha + R * (1.0 - blueAlpha);
+                    var blueSig = R - tapeSilkHF_R;
+                    R = R + blueSig * blueSig * 0.08 * textureR + blueSig * blueSig * blueSig * 0.04 * textureR;
+                }
+                
+                // OUTPUT TRANSFORMER (ALWAYS ON)
+                R = R + R * R * 0.003 + R * R * R * 0.0015;
+                
+                channels[0][s] = L;
+                channels[1][s] = R;
+                
+                // Update meters
+                drivePeakL = Math.max(drivePeakL, Math.abs(wetTapeSigL));
+                drivePeakR = Math.max(drivePeakR, Math.abs(wetTapeSigR));
+                levelPeakL = Math.max(levelPeakL, Math.abs(L));
+                levelPeakR = Math.max(levelPeakR, Math.abs(R));
+            }
+            
+            Globals.tapeDrivePeakL = Math.min(1.0, drivePeakL);
+            Globals.tapeDrivePeakR = Math.min(1.0, drivePeakR);
+            Globals.tapeLevelPeakL = levelPeakL;
+            Globals.tapeLevelPeakR = levelPeakR;
+        }
+        else
+        {
+            Globals.tapeDrivePeakL = 0;
+            Globals.tapeDrivePeakR = 0;
+            Globals.tapeLevelPeakL = 0;
+            Globals.tapeLevelPeakR = 0;
+        }
+    }
+    else
+    {
+        // ========== ORDER 2: TAPE → COMP ==========
+        
+        if (!tapeBypass)
+        {
+            for (var s = 0; s < numSamples; s++)
+            {
+                var L = channels[0][s];
+                var R = channels[1][s];
+                
+                // ===== LEFT CHANNEL (same as Order 1) =====
+                
+                tapeInDC_L = tapeInDC_L * 0.999 + L * 0.001;
+                var acSigL = L - tapeInDC_L;
+                tapeInLF_L = tapeInLF_L * 0.95 + acSigL * 0.05;
+                var lfAmt = Math.abs(tapeInLF_L);
+                var inputTransL = acSigL + acSigL * acSigL * 0.01 * lfAmt + acSigL * acSigL * acSigL * 0.005 * lfAmt;
+                
+                var dryTapeSigL = inputTransL * trimL;
+                var wetTapeSigL = dryTapeSigL;
+                
+                if (tapeInL) {
+                    tapePreDC_L = tapePreDC_L * dcBlockAlphaL + wetTapeSigL * (1.0 - dcBlockAlphaL);
+                    wetTapeSigL = wetTapeSigL - tapePreDC_L;
+                    tapePreLF_L = tapePreLF_L * preBoostAlphaL + wetTapeSigL * (1.0 - preBoostAlphaL);
+                    wetTapeSigL = wetTapeSigL + tapePreLF_L * (preGainL - 1.0);
+                    
+                    var drive = 1.0 + satL * 2.5;
+                    wetTapeSigL = wetTapeSigL * drive;
+                    
+                    tapeSatLF_L = tapeSatLF_L * 0.98 + wetTapeSigL * 0.02;
+                    var lfSatAmt = Math.abs(tapeSatLF_L) * 0.5;
+                    
+                    var x = wetTapeSigL;
+                    wetTapeSigL = x / (1.0 + Math.abs(x) * 0.5);
+                    wetTapeSigL = wetTapeSigL + x * x * 0.1 * (1.0 + lfSatAmt) + x * x * x * 0.05 * (1.0 + lfSatAmt);
+                    
+                    wetTapeSigL = wetTapeSigL / drive;
+                    
+                    tapeDeEmp_L = tapeDeEmp_L * deAlphaL + wetTapeSigL * (1.0 - deAlphaL);
+                    wetTapeSigL = tapeDeEmp_L;
+                }
+                
+                L = dryTapeSigL * (1.0 - blendL) + wetTapeSigL * blendL;
+                
+                if (colorL == 1) {
+                    tapeSilkLF_L = tapeSilkLF_L * orangeAlpha + L * (1.0 - orangeAlpha);
+                    var orangeSig = tapeSilkLF_L;
+                    L = L + orangeSig * orangeSig * 0.1 * textureL + orangeSig * orangeSig * orangeSig * 0.05 * textureL;
+                }
+                else if (colorL == 2) {
+                    tapeSilkHF_L = tapeSilkHF_L * blueAlpha + L * (1.0 - blueAlpha);
+                    var blueSig = L - tapeSilkHF_L;
+                    L = L + blueSig * blueSig * 0.08 * textureL + blueSig * blueSig * blueSig * 0.04 * textureL;
+                }
+                
+                L = L + L * L * 0.003 + L * L * L * 0.0015;
+                
+                // ===== RIGHT CHANNEL =====
+                
+                tapeInDC_R = tapeInDC_R * 0.999 + R * 0.001;
+                var acSigR = R - tapeInDC_R;
+                tapeInLF_R = tapeInLF_R * 0.95 + acSigR * 0.05;
+                var lfAmt = Math.abs(tapeInLF_R);
+                var inputTransR = acSigR + acSigR * acSigR * 0.01 * lfAmt + acSigR * acSigR * acSigR * 0.005 * lfAmt;
+                
+                var dryTapeSigR = inputTransR * trimR;
+                var wetTapeSigR = dryTapeSigR;
+                
+                if (tapeInR) {
+                    tapePreDC_R = tapePreDC_R * dcBlockAlphaR + wetTapeSigR * (1.0 - dcBlockAlphaR);
+                    wetTapeSigR = wetTapeSigR - tapePreDC_R;
+                    tapePreLF_R = tapePreLF_R * preBoostAlphaR + wetTapeSigR * (1.0 - preBoostAlphaR);
+                    wetTapeSigR = wetTapeSigR + tapePreLF_R * (preGainR - 1.0);
+                    
+                    var drive = 1.0 + satR * 2.5;
+                    wetTapeSigR = wetTapeSigR * drive;
+                    
+                    tapeSatLF_R = tapeSatLF_R * 0.98 + wetTapeSigR * 0.02;
+                    var lfSatAmt = Math.abs(tapeSatLF_R) * 0.5;
+                    
+                    var x = wetTapeSigR;
+                    wetTapeSigR = x / (1.0 + Math.abs(x) * 0.5);
+                    wetTapeSigR = wetTapeSigR + x * x * 0.1 * (1.0 + lfSatAmt) + x * x * x * 0.05 * (1.0 + lfSatAmt);
+                    
+                    wetTapeSigR = wetTapeSigR / drive;
+                    
+                    tapeDeEmp_R = tapeDeEmp_R * deAlphaR + wetTapeSigR * (1.0 - deAlphaR);
+                    wetTapeSigR = tapeDeEmp_R;
+                }
+                
+                R = dryTapeSigR * (1.0 - blendR) + wetTapeSigR * blendR;
+                
+                if (colorR == 1) {
+                    tapeSilkLF_R = tapeSilkLF_R * orangeAlpha + R * (1.0 - orangeAlpha);
+                    var orangeSig = tapeSilkLF_R;
+                    R = R + orangeSig * orangeSig * 0.1 * textureR + orangeSig * orangeSig * orangeSig * 0.05 * textureR;
+                }
+                else if (colorR == 2) {
+                    tapeSilkHF_R = tapeSilkHF_R * blueAlpha + R * (1.0 - blueAlpha);
+                    var blueSig = R - tapeSilkHF_R;
+                    R = R + blueSig * blueSig * 0.08 * textureR + blueSig * blueSig * blueSig * 0.04 * textureR;
+                }
+                
+                R = R + R * R * 0.003 + R * R * R * 0.0015;
+                
+                channels[0][s] = L;
+                channels[1][s] = R;
+                
+                drivePeakL = Math.max(drivePeakL, Math.abs(wetTapeSigL));
+                drivePeakR = Math.max(drivePeakR, Math.abs(wetTapeSigR));
+                levelPeakL = Math.max(levelPeakL, Math.abs(L));
+                levelPeakR = Math.max(levelPeakR, Math.abs(R));
+            }
+            
+            Globals.tapeDrivePeakL = Math.min(1.0, drivePeakL);
+            Globals.tapeDrivePeakR = Math.min(1.0, drivePeakR);
+            Globals.tapeLevelPeakL = levelPeakL;
+            Globals.tapeLevelPeakR = levelPeakR;
+        }
+        else
+        {
+            Globals.tapeDrivePeakL = 0;
+            Globals.tapeDrivePeakR = 0;
+            Globals.tapeLevelPeakL = 0;
+            Globals.tapeLevelPeakR = 0;
+        }
+        
+        if (!compBypass)
+        {
+            for (var s = 0; s < numSamples; s++)
+            {
+                var L = channels[0][s];
+                var R = channels[1][s];
+                var dryL = L;
+                var dryR = R;
+                
+                if (midSide)
+                {
+                    var M = (L + R) * 0.5;
+                    var S = (L - R) * 0.5;
+                    
+                    M = M * inputGainMid;
+                    
+                    var detectionM = M;
+                    if (Globals.SCHPFSwitchMid > 0.5) {
+                        var scFreq = (Globals.SCHPFSwitchMid > 1.5) ? 120.0 : 60.0;
+                        var omega = 6.28318 * scFreq / sr;
+                        var alpha = Math.exp(-omega);
+                        detectionM = M - scHPF_Mid * alpha;
+                        scHPF_Mid = detectionM;
+                    }
+                    
+                    var attackTimeMid = 0.0002;
+                    var releaseTimeMid = 0.3;
+                    var tcMid = Globals.TimeConstantMid;
+                    var inputLevelMid = Math.abs(detectionM);
+                    
+                    if (tcMid < 1.5) {
+                        attackTimeMid = 0.0002;
+                        releaseTimeMid = 0.3;
+                    }
+                    else if (tcMid < 2.5) {
+                        attackTimeMid = 0.0002;
+                        releaseTimeMid = 0.8;
+                    }
+                    else if (tcMid < 3.5) {
+                        attackTimeMid = 0.0004;
+                        releaseTimeMid = 2.0;
+                    }
+                    else if (tcMid < 4.5) {
+                        attackTimeMid = 0.0004;
+                        releaseTimeMid = 5.0;
+                    }
+                    else if (tcMid < 5.5) {
+                        attackTimeMid = 0.0004;
+                        if (inputLevelMid > peakHoldMid) {
+                            peakHoldMid = inputLevelMid;
+                            peakTimerMid = 0.0;
+                            releaseTimeMid = 2.0;
+                        }
+                        else {
+                            peakTimerMid = peakTimerMid + (1.0 / sr);
+                            releaseTimeMid = (peakTimerMid < 0.1) ? 2.0 : 10.0;
+                        }
+                    }
+                    else {
+                        attackTimeMid = 0.0002;
+                        if (inputLevelMid > peakHoldMid) {
+                            peakHoldMid = inputLevelMid;
+                            peakTimerMid = 0.0;
+                            releaseTimeMid = 0.3;
+                        }
+                        else {
+                            peakTimerMid = peakTimerMid + (1.0 / sr);
+                            if (peakTimerMid < 0.05)
+                                releaseTimeMid = 0.3;
+                            else if (peakTimerMid < 0.5)
+                                releaseTimeMid = 10.0;
+                            else
+                                releaseTimeMid = 25.0;
+                        }
+                    }
+                    
+                    var attackCoeffMid = Math.exp(-1.0 / (attackTimeMid * sr));
+                    var releaseCoeffMid = Math.exp(-1.0 / (releaseTimeMid * sr));
+                    
+                    if (inputLevelMid > envMid)
+                        envMid = envMid + (1.0 - attackCoeffMid) * (inputLevelMid - envMid);
+                    else
+                        envMid = envMid + (1.0 - releaseCoeffMid) * (inputLevelMid - envMid);
+                    
+                    var preMid = M;
+                    
+                    if (Globals.ThresholdMid > 0.1) {
+                        if (envMid > thresholdMid) {
+                            var overMid = envMid - thresholdMid;
+                            var ratioMid = 2.0 + (overMid * 10.0);
+                            ratioMid = Math.min(ratioMid, 30.0);
+                            var compMid = thresholdMid + (overMid / ratioMid);
+                            var scale = compMid / envMid;
+                            M = M * scale;
+                        }
+                    }
+                    
+                    var postMid = M;
+                    M = M * outputGainMid;
+                    M = M / (1.0 + Math.abs(M));
+                    
+                    if (Math.abs(preMid) > 0.001) {
+                        var grMid = 1.0 - (Math.abs(postMid) / Math.abs(preMid));
+                        peakGRL = Math.max(peakGRL, Math.max(0.0, Math.min(1.0, grMid)));
+                    }
+                    
+                    S = S * inputGainSide;
+                    
+                    var detectionS = S;
+                    if (Globals.SCHPFSwitchSide > 0.5) {
+                        var scFreq = (Globals.SCHPFSwitchSide > 1.5) ? 120.0 : 60.0;
+                        var omega = 6.28318 * scFreq / sr;
+                        var alpha = Math.exp(-omega);
+                        detectionS = S - scHPF_Side * alpha;
+                        scHPF_Side = detectionS;
+                    }
+                    
+                    var attackTimeSide = 0.0002;
+                    var releaseTimeSide = 0.3;
+                    var tcSide = Globals.TimeConstantSide;
+                    var inputLevelSide = Math.abs(detectionS);
+                    
+                    if (tcSide < 1.5) {
+                        attackTimeSide = 0.0002;
+                        releaseTimeSide = 0.3;
+                    }
+                    else if (tcSide < 2.5) {
+                        attackTimeSide = 0.0002;
+                        releaseTimeSide = 0.8;
+                    }
+                    else if (tcSide < 3.5) {
+                        attackTimeSide = 0.0004;
+                        releaseTimeSide = 2.0;
+                    }
+                    else if (tcSide < 4.5) {
+                        attackTimeSide = 0.0004;
+                        releaseTimeSide = 5.0;
+                    }
+                    else if (tcSide < 5.5) {
+                        attackTimeSide = 0.0004;
+                        if (inputLevelSide > peakHoldSide) {
+                            peakHoldSide = inputLevelSide;
+                            peakTimerSide = 0.0;
+                            releaseTimeSide = 2.0;
+                        }
+                        else {
+                            peakTimerSide = peakTimerSide + (1.0 / sr);
+                            releaseTimeSide = (peakTimerSide < 0.1) ? 2.0 : 10.0;
+                        }
+                    }
+                    else {
+                        attackTimeSide = 0.0002;
+                        if (inputLevelSide > peakHoldSide) {
+                            peakHoldSide = inputLevelSide;
+                            peakTimerSide = 0.0;
+                            releaseTimeSide = 0.3;
+                        }
+                        else {
+                            peakTimerSide = peakTimerSide + (1.0 / sr);
+                            if (peakTimerSide < 0.05)
+                                releaseTimeSide = 0.3;
+                            else if (peakTimerSide < 0.5)
+                                releaseTimeSide = 10.0;
+                            else
+                                releaseTimeSide = 25.0;
+                        }
+                    }
+                    
+                    var attackCoeffSide = Math.exp(-1.0 / (attackTimeSide * sr));
+                    var releaseCoeffSide = Math.exp(-1.0 / (releaseTimeSide * sr));
+                    
+                    if (inputLevelSide > envSide)
+                        envSide = envSide + (1.0 - attackCoeffSide) * (inputLevelSide - envSide);
+                    else
+                        envSide = envSide + (1.0 - releaseCoeffSide) * (inputLevelSide - envSide);
+                    
+                    var preSide = S;
+                    
+                    if (Globals.ThresholdSide > 0.1) {
+                        if (envSide > thresholdSide) {
+                            var overSide = envSide - thresholdSide;
+                            var ratioSide = 2.0 + (overSide * 10.0);
+                            ratioSide = Math.min(ratioSide, 30.0);
+                            var compSide = thresholdSide + (overSide / ratioSide);
+                            var scale = compSide / envSide;
+                            S = S * scale;
+                        }
+                    }
+                    
+                    var postSide = S;
+                    S = S * outputGainSide;
+                    S = S / (1.0 + Math.abs(S));
+                    
+                    if (Math.abs(preSide) > 0.001) {
+                        var grSide = 1.0 - (Math.abs(postSide) / Math.abs(preSide));
+                        peakGRR = Math.max(peakGRR, Math.max(0.0, Math.min(1.0, grSide)));
+                    }
+                    
+                    L = M + S;
+                    R = M - S;
+                }
+                else
+                {
+                    L = L * inputGainL;
+                    
+                    var detectionL = L;
+                    if (Globals.SCHPFSwitchL > 0.5) {
+                        var scFreq = (Globals.SCHPFSwitchL > 1.5) ? 120.0 : 60.0;
+                        var omega = 6.28318 * scFreq / sr;
+                        var alpha = Math.exp(-omega);
+                        detectionL = L - scHPF_L * alpha;
+                        scHPF_L = detectionL;
+                    }
+                    
+                    var attackTimeL = 0.0002;
+                    var releaseTimeL = 0.3;
+                    var tcL = Globals.TimeConstantL;
+                    var inputLevelL = Math.abs(detectionL);
+                    
+                    if (tcL < 1.5) {
+                        attackTimeL = 0.0002;
+                        releaseTimeL = 0.3;
+                    }
+                    else if (tcL < 2.5) {
+                        attackTimeL = 0.0002;
+                        releaseTimeL = 0.8;
+                    }
+                    else if (tcL < 3.5) {
+                        attackTimeL = 0.0004;
+                        releaseTimeL = 2.0;
+                    }
+                    else if (tcL < 4.5) {
+                        attackTimeL = 0.0004;
+                        releaseTimeL = 5.0;
+                    }
+                    else if (tcL < 5.5) {
+                        attackTimeL = 0.0004;
+                        if (inputLevelL > peakHoldL) {
+                            peakHoldL = inputLevelL;
+                            peakTimerL = 0.0;
+                            releaseTimeL = 2.0;
+                        }
+                        else {
+                            peakTimerL = peakTimerL + (1.0 / sr);
+                            releaseTimeL = (peakTimerL < 0.1) ? 2.0 : 10.0;
+                        }
+                    }
+                    else {
+                        attackTimeL = 0.0002;
+                        if (inputLevelL > peakHoldL) {
+                            peakHoldL = inputLevelL;
+                            peakTimerL = 0.0;
+                            releaseTimeL = 0.3;
+                        }
+                        else {
+                            peakTimerL = peakTimerL + (1.0 / sr);
+                            if (peakTimerL < 0.05)
+                                releaseTimeL = 0.3;
+                            else if (peakTimerL < 0.5)
+                                releaseTimeL = 10.0;
+                            else
+                                releaseTimeL = 25.0;
+                        }
+                    }
+                    
+                    var attackCoeffL = Math.exp(-1.0 / (attackTimeL * sr));
+                    var releaseCoeffL = Math.exp(-1.0 / (releaseTimeL * sr));
+                    
+                    if (inputLevelL > envL)
+                        envL = envL + (1.0 - attackCoeffL) * (inputLevelL - envL);
+                    else
+                        envL = envL + (1.0 - releaseCoeffL) * (inputLevelL - envL);
+                    
+                    var preL = L;
+                    
+                    if (Globals.ThresholdL > 0.1) {
+                        if (envL > thresholdL) {
+                            var overL = envL - thresholdL;
+                            var ratioL = 2.0 + (overL * 10.0);
+                            ratioL = Math.min(ratioL, 30.0);
+                            var compL = thresholdL + (overL / ratioL);
+                            var scale = compL / envL;
+                            L = L * scale;
+                        }
+                    }
+                    
+                    var postL = L;
+                    L = L * outputGainL;
+                    L = L / (1.0 + Math.abs(L));
+                    
+                    if (Math.abs(preL) > 0.001) {
+                        var grLeft = 1.0 - (Math.abs(postL) / Math.abs(preL));
+                        peakGRL = Math.max(peakGRL, Math.max(0.0, Math.min(1.0, grLeft)));
+                    }
+                    
+                    R = R * inputGainR;
+                    
+                    var detectionR = R;
+                    if (Globals.SCHPFSwitchR > 0.5) {
+                        var scFreq = (Globals.SCHPFSwitchR > 1.5) ? 120.0 : 60.0;
+                        var omega = 6.28318 * scFreq / sr;
+                        var alpha = Math.exp(-omega);
+                        detectionR = R - scHPF_R * alpha;
+                        scHPF_R = detectionR;
+                    }
+                    
+                    var attackTimeR = 0.0002;
+                    var releaseTimeR = 0.3;
+                    var tcR = Globals.TimeConstantR;
+                    var inputLevelR = Math.abs(detectionR);
+                    
+                    if (tcR < 1.5) {
+                        attackTimeR = 0.0002;
+                        releaseTimeR = 0.3;
+                    }
+                    else if (tcR < 2.5) {
+                        attackTimeR = 0.0002;
+                        releaseTimeR = 0.8;
+                    }
+                    else if (tcR < 3.5) {
+                        attackTimeR = 0.0004;
+                        releaseTimeR = 2.0;
+                    }
+                    else if (tcR < 4.5) {
+                        attackTimeR = 0.0004;
+                        releaseTimeR = 5.0;
+                    }
+                    else if (tcR < 5.5) {
+                        attackTimeR = 0.0004;
+                        if (inputLevelR > peakHoldR) {
+                            peakHoldR = inputLevelR;
+                            peakTimerR = 0.0;
+                            releaseTimeR = 2.0;
+                        }
+                        else {
+                            peakTimerR = peakTimerR + (1.0 / sr);
+                            releaseTimeR = (peakTimerR < 0.1) ? 2.0 : 10.0;
+                        }
+                    }
+                    else {
+                        attackTimeR = 0.0002;
+                        if (inputLevelR > peakHoldR) {
+                            peakHoldR = inputLevelR;
+                            peakTimerR = 0.0;
+                            releaseTimeR = 0.3;
+                        }
+                        else {
+                            peakTimerR = peakTimerR + (1.0 / sr);
+                            if (peakTimerR < 0.05)
+                                releaseTimeR = 0.3;
+                            else if (peakTimerR < 0.5)
+                                releaseTimeR = 10.0;
+                            else
+                                releaseTimeR = 25.0;
+                        }
+                    }
+                    
+                    var attackCoeffR = Math.exp(-1.0 / (attackTimeR * sr));
+                    var releaseCoeffR = Math.exp(-1.0 / (releaseTimeR * sr));
+                    
+                    if (inputLevelR > envR)
+                        envR = envR + (1.0 - attackCoeffR) * (inputLevelR - envR);
+                    else
+                        envR = envR + (1.0 - releaseCoeffR) * (inputLevelR - envR);
+                    
+                    var preR = R;
+                    
+                    if (Globals.ThresholdR > 0.1) {
+                        if (envR > thresholdR) {
+                            var overR = envR - thresholdR;
+                            var ratioR = 2.0 + (overR * 10.0);
+                            ratioR = Math.min(ratioR, 30.0);
+                            var compR = thresholdR + (overR / ratioR);
+                            var scale = compR / envR;
+                            R = R * scale;
+                        }
+                    }
+                    
+                    var postR = R;
+                    R = R * outputGainR;
+                    R = R / (1.0 + Math.abs(R));
+                    
+                    if (Math.abs(preR) > 0.001) {
+                        var grRight = 1.0 - (Math.abs(postR) / Math.abs(preR));
+                        peakGRR = Math.max(peakGRR, Math.max(0.0, Math.min(1.0, grRight)));
+                    }
+                }
+                
+                L = dryL * (1.0 - mix) + L * mix;
+                R = dryR * (1.0 - mix) + R * mix;
+                
+                channels[0][s] = L;
+                channels[1][s] = R;
+            }
+            
+            Globals.compGRL = peakGRL;
+            Globals.compGRR = peakGRR;
+        }
+        else
+        {
+            Globals.compGRL = 0.0;
+            Globals.compGRR = 0.0;
+        }
+    }
+}
+
+Console.print("✅ LUNA MU 6742 - CORRECTED SIGNAL FLOW");
+Console.print("   • Input/Output Transformers: ALWAYS ON");
+Console.print("   • Tape IN switch: Controls pre-emphasis/saturation/de-emphasis only");
+Console.print("   • Blend: Always mixes dry vs wet");
+Console.print("   • When Tape IN=OFF: transformers+trim+blend+color still process");
